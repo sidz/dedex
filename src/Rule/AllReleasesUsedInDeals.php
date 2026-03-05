@@ -41,11 +41,34 @@ class AllReleasesUsedInDeals extends Rule {
     $references = [];
     $references_used = [];
     $valid = true;
-    
-    // First get all resource references from SoundRecordings and Images
-    foreach ($newReleaseMessage->getReleaseList()->getRelease() as $r) {
-      foreach ($r->getReleaseReference() as $rr) {
+
+    // First get all release references
+    // ERN 4.3 returns single Release object; other versions return array
+    $releases = $newReleaseMessage->getReleaseList()->getRelease();
+    if (!is_array($releases)) {
+      $releases = $releases !== null ? [$releases] : [];
+    }
+    foreach ($releases as $r) {
+      // ERN 4.3 returns single string; other versions return array
+      $refs = $r->getReleaseReference();
+      if (!is_array($refs)) {
+        $refs = $refs !== null ? [$refs] : [];
+      }
+      foreach ($refs as $rr) {
         $references[] = $rr;
+      }
+    }
+    // Include track releases (ERN 4.x — all 4.x versions have getTrackRelease, 382 does not)
+    $releaseList = $newReleaseMessage->getReleaseList();
+    if (!$releaseList instanceof \DedexBundle\Entity\Ern382\ReleaseListType) {
+      foreach ($releaseList->getTrackRelease() as $tr) {
+        $ref = $tr->getReleaseReference();
+        if (!is_array($ref)) {
+          $ref = $ref !== null ? [$ref] : [];
+        }
+        foreach ($ref as $rr) {
+          $references[] = $rr;
+        }
       }
     }
     

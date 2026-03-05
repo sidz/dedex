@@ -311,13 +311,61 @@ class ParserControllerRulesTest extends TestCase {
     /* @var $ddex NewReleaseMessage */
     $xml_path = "tests/samples/with_assets/004_complete/1199119911991.xml";
     $parser = new ErnParserController();
-		
+
     $parser->addRuleSet(RuleSet::MUSICAL_ALBUM("tests/samples/with_assets/004_complete/"));
-		
+
 		$ddex = $parser->parse($xml_path);
 		$this->assertTrue(true); // Will pass because all rules are WARNING
-		
+
 		$this->assertEquals("", $parser->getRuleMessages());
+  }
+
+  /**
+   * Test rules pass on valid ERN 4.3 XML
+   */
+  public function testRulesPassOnErn43() {
+    $xml_path = "tests/samples/018_ern43.xml";
+
+    // Test each rule individually
+    $parser = new ErnParserController();
+    $parser->addRule(new AtLeastOneSoundRecordingRule(Rule::LEVEL_ERROR));
+    $ddex = $parser->parse($xml_path);
+    $this->assertTrue(true);
+
+    $parser = new ErnParserController();
+    $parser->addRule(new AtLeastOneImage(Rule::LEVEL_ERROR));
+    $ddex = $parser->parse($xml_path);
+    $this->assertTrue(true);
+
+    $parser = new ErnParserController();
+    $parser->addRule(new AtLeastOneImageFrontCover(Rule::LEVEL_ERROR));
+    $ddex = $parser->parse($xml_path);
+    $this->assertTrue(true);
+
+    $parser = new ErnParserController();
+    $parser->addRule(new AllSoundRecordingsHaveIsrc(Rule::LEVEL_ERROR));
+    $ddex = $parser->parse($xml_path);
+    $this->assertTrue(true);
+
+    $parser = new ErnParserController();
+    $parser->addRule(new OnlyOneMainRelease(Rule::LEVEL_ERROR));
+    $ddex = $parser->parse($xml_path);
+    $this->assertTrue(true);
+
+    $parser = new ErnParserController();
+    $parser->addRule(new AtLeastOneAlbumRelease(Rule::LEVEL_ERROR));
+    $ddex = $parser->parse($xml_path);
+    $this->assertTrue(true);
+
+    $parser = new ErnParserController();
+    $parser->addRule(new AllResourcesUsedInReleases(Rule::LEVEL_ERROR));
+    $ddex = $parser->parse($xml_path);
+    $this->assertTrue(true);
+
+    $parser = new ErnParserController();
+    $parser->addRule(new AllReleasesUsedInDeals(Rule::LEVEL_ERROR));
+    $ddex = $parser->parse($xml_path);
+    $this->assertTrue(true);
   }
 
 }

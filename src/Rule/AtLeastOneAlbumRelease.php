@@ -35,14 +35,19 @@ class AtLeastOneAlbumRelease extends Rule {
   protected $message = "Must have at least one release of type Album";
   
   public function validates($newReleaseMessage): bool {
-    foreach ($newReleaseMessage->getReleaseList()->getRelease() as $release) {
+    // ERN 4.3 returns single Release object; other versions return array
+    $releases = $newReleaseMessage->getReleaseList()->getRelease();
+    if (!is_array($releases)) {
+      $releases = $releases !== null ? [$releases] : [];
+    }
+    foreach ($releases as $release) {
       foreach ($release->getReleaseType() as $type) {
         if ($type->value() === "Album") {
           return true;
         }
       }
     }
-    
+
     return false;
   }
 }

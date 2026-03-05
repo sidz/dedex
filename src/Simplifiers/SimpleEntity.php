@@ -84,6 +84,10 @@ class SimpleEntity {
 		return $version[0] === '4';
 	}
 
+	protected function isVersion43OrLater(string $version): bool {
+		return $this->isVersion4x($version) && intval(substr($version, 0, 2)) >= 43;
+	}
+
 	/**
 	 * Build an index of party references to full names from the PartyList.
 	 * Used for ERN 4.x where artist/contributor names are stored in a
@@ -94,7 +98,7 @@ class SimpleEntity {
 	 */
 	protected function buildPartyIndex($ern): array {
 		$index = [];
-		if (!method_exists($ern, 'getPartyList') || $ern->getPartyList() === null) {
+		if ($ern instanceof \DedexBundle\Entity\Ern382\NewReleaseMessage || $ern->getPartyList() === null) {
 			return $index;
 		}
 		foreach ($ern->getPartyList() as $party) {
@@ -114,12 +118,13 @@ class SimpleEntity {
 	 * @param array|null $partyIndex null for 3.x, [ref => name] for 4.x
 	 * @return SimpleArtist[]
 	 */
-	protected function resolveDisplayArtists(array $displayArtists, ?array $partyIndex): array {
+	protected function resolveDisplayArtists(array $displayArtists, ?array $partyIndex, array $displayNames = []): array {
 		$artists = [];
-		foreach ($displayArtists as $artist) {
+		foreach ($displayArtists as $i => $artist) {
 			try {
 				if ($partyIndex !== null) {
-					$name = $partyIndex[$artist->getArtistPartyReference()] ?? null;
+					// Prefer DisplayArtistName when available (display name may differ from PartyList name)
+					$name = isset($displayNames[$i]) ? (string) $displayNames[$i] : ($partyIndex[$artist->getArtistPartyReference()] ?? null);
 					$role = $this->getUserDefinedValue($artist->getDisplayArtistRole());
 				} else {
 					$name = $artist->getPartyName()[0]->getFullName();

@@ -36,7 +36,25 @@ namespace DedexBundle\Rule;
  */
 class AllResourcesUsedInReleases extends Rule {
   protected $message = "All resources must be used in releases.";
-  
+
+  private function collectResourceRefsFromGroup($group, array &$refs): void {
+    // Collect from content items
+    foreach ($group->getResourceGroupContentItem() as $item) {
+      $ref = $item->getReleaseResourceReference();
+      if ($ref !== null) {
+        $refs[] = (string) $ref;
+      }
+    }
+    // Collect from linked resource references
+    foreach ($group->getLinkedReleaseResourceReference() as $linked) {
+      $refs[] = (string) $linked->value();
+    }
+    // Recurse into sub-groups
+    foreach ($group->getResourceGroup() as $subGroup) {
+      $this->collectResourceRefsFromGroup($subGroup, $refs);
+    }
+  }
+
   public function validates($newReleaseMessage): bool {
     $references = [];
     $references_used = [];
@@ -51,10 +69,30 @@ class AllResourcesUsedInReleases extends Rule {
     }
     
     // Second, browse all releases to check all references are used at least once.
-    foreach ($newReleaseMessage->getReleaseList()->getRelease() as $rel) {
-      foreach ($rel->getReleaseResourceReferenceList() as $rrrl) {
-        $val = $rrrl->value();        
-        $references_used[] = $val;
+    // ERN 4.3 returns single Release object; other versions return array
+    $releases = $newReleaseMessage->getReleaseList()->getRelease();
+    if (!is_array($releases)) {
+      $releases = $releases !== null ? [$releases] : [];
+    }
+    foreach ($releases as $rel) {
+      // ERN 382 uses getReleaseResourceReferenceList(); all 4.x use ResourceGroup
+      if ($rel instanceof \DedexBundle\Entity\Ern382\ReleaseType) {
+        foreach ($rel->getReleaseResourceReferenceList() as $rrrl) {
+          $val = $rrrl->value();
+          $references_used[] = $val;
+        }
+      } elseif ($rel->getResourceGroup() !== null) {
+        $this->collectResourceRefsFromGroup($rel->getResourceGroup(), $references_used);
+      }
+    }
+    // Include track releases (ERN 4.x — all 4.x versions have getTrackRelease, 382 does not)
+    $releaseList = $newReleaseMessage->getReleaseList();
+    if (!$releaseList instanceof \DedexBundle\Entity\Ern382\ReleaseListType) {
+      foreach ($releaseList->getTrackRelease() as $tr) {
+        $ref = $tr->getReleaseResourceReference();
+        if ($ref !== null) {
+          $references_used[] = (string) $ref;
+        }
       }
     }
     $references_used = array_unique($references_used);

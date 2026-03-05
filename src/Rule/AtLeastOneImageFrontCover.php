@@ -37,12 +37,16 @@ class AtLeastOneImageFrontCover extends Rule {
   public function validates($newReleaseMessage): bool {
     $valid = false;
     foreach ($newReleaseMessage->getResourceList()->getImage() as $image) {
-      if ($image->getImageType()->value() === "FrontCoverImage") {
+      // ERN 382 uses getImageType(), all 4.x versions use getType()
+      $type = $image instanceof \DedexBundle\Entity\Ern382\ImageType
+        ? $image->getImageType()
+        : $image->getType();
+      if ($type !== null && $type->value() === "FrontCoverImage") {
         $valid = true;
         break;
       }
     }
-    
+
     return $valid;
   }
 }

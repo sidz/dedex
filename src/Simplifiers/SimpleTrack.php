@@ -73,6 +73,21 @@ class SimpleTrack extends SimpleEntity {
 	private $version;
 
 	/**
+	 * Get the first SoundRecordingEdition (ERN 4.3+).
+	 * In ERN 4.3, ResourceId, TechnicalDetails, and PLine live inside editions.
+	 *
+	 * @return mixed|null
+	 */
+	private function getFirstEdition() {
+		try {
+			$editions = $this->ddexSoundrecording->getSoundRecordingEdition();
+			return !empty($editions) ? $editions[0] : null;
+		} catch (\Throwable $ex) {
+			return null;
+		}
+	}
+
+	/**
 	 * @param SoundRecordingType $soundrecording
 	 * @param SimpleDeal|null $deal
 	 * @param string $version version string as detected by ErnParserController
@@ -120,8 +135,16 @@ class SimpleTrack extends SimpleEntity {
 	 * @return string FileName as given in dedex or empty string if not specified
 	 */
 	public function getFileName() {
+		if ($this->isVersion43OrLater($this->version)) {
+			// ERN 4.3+: Edition → TechnicalDetails → DeliveryFile → File → URI
+			try {
+				return $this->getFirstEdition()->getTechnicalDetails()[0]->getDeliveryFile()[0]->getFile()->getURI();
+			} catch (Throwable $ex) {
+				return "";
+			}
+		}
 		if ($this->isVersion4x($this->version)) {
-			// ERN 4.x: URI in TechnicalDetails/File
+			// ERN 4.1/4.1.1: TechnicalDetails/File/URI
 			try {
 				return $this->ddexDetails->getTechnicalDetails()[0]->getFile()->getURI();
 			} catch (Throwable $ex) {
@@ -152,8 +175,16 @@ class SimpleTrack extends SimpleEntity {
 	 * @return string or null
 	 */
 	public function getIsrc(): ?string {
+		if ($this->isVersion43OrLater($this->version)) {
+			// ERN 4.3+: ResourceId is inside SoundRecordingEdition
+			try {
+				return $this->getFirstEdition()->getResourceId()[0]->getISRC();
+			} catch (Throwable $ex) {
+				return null;
+			}
+		}
 		if ($this->isVersion4x($this->version)) {
-			// ERN 4.x: ResourceId instead of SoundRecordingId
+			// ERN 4.1/4.1.1: ResourceId directly on SoundRecording
 			try {
 				return $this->ddexSoundrecording->getResourceId()[0]->getISRC();
 			} catch (Throwable $ex) {
@@ -299,7 +330,11 @@ class SimpleTrack extends SimpleEntity {
 	 * @return SimpleArtist[]
 	 */
 	public function getDisplayArtists() {
-		return $this->resolveDisplayArtists($this->ddexDetails->getDisplayArtist(), $this->partyIndex);
+		$displayNames = [];
+		if ($this->isVersion4x($this->version)) {
+			$displayNames = $this->ddexDetails->getDisplayArtistName() ?? [];
+		}
+		return $this->resolveDisplayArtists($this->ddexDetails->getDisplayArtist(), $this->partyIndex, $displayNames);
 	}
 	
 	/**
@@ -395,6 +430,14 @@ class SimpleTrack extends SimpleEntity {
 	 * @return int|null
 	 */
 	public function getPLineYear(): ?int {
+		if ($this->isVersion43OrLater($this->version)) {
+			// ERN 4.3+: PLine is inside SoundRecordingEdition
+			try {
+				return (int) $this->getFirstEdition()->getPLine()[0]->getYear();
+			} catch (Throwable $ex) {
+				return null;
+			}
+		}
 		try {
 			return (int) $this->ddexDetails->getPLine()[0]->getYear();
 		} catch (Throwable $ex) {
@@ -403,13 +446,21 @@ class SimpleTrack extends SimpleEntity {
 			return null;
 		}
 	}
-	
+
 	/**
 	 * Spposes there is only one PLine info. Use first one only (if any).
-	 * 
+	 *
 	 * @return string|null
 	 */
 	public function getPLineText(): ?string {
+		if ($this->isVersion43OrLater($this->version)) {
+			// ERN 4.3+: PLine is inside SoundRecordingEdition
+			try {
+				return $this->getFirstEdition()->getPLine()[0]->getPLineText();
+			} catch (Throwable $ex) {
+				return null;
+			}
+		}
 		try {
 			return $this->ddexDetails->getPLine()[0]->getPLineText();
 		} catch (Throwable $ex) {
@@ -483,8 +534,16 @@ class SimpleTrack extends SimpleEntity {
 	 * @return string|null
 	 */
 	public function getHashSum(): ?string {
+		if ($this->isVersion43OrLater($this->version)) {
+			// ERN 4.3+: Edition → TechnicalDetails → DeliveryFile → File → HashSum
+			try {
+				return $this->getFirstEdition()->getTechnicalDetails()[0]->getDeliveryFile()[0]->getFile()->getHashSum()->getHashSumValue();
+			} catch (Throwable $ex) {
+				return null;
+			}
+		}
 		if ($this->isVersion4x($this->version)) {
-			// ERN 4.x: TechnicalDetails/File (single)/HashSum/HashSumValue
+			// ERN 4.1/4.1.1: TechnicalDetails/File (single)/HashSum/HashSumValue
 			try {
 				return $this->ddexDetails->getTechnicalDetails()[0]->getFile()->getHashSum()->getHashSumValue();
 			} catch (Throwable $ex) {
@@ -505,8 +564,16 @@ class SimpleTrack extends SimpleEntity {
 	 * @return string|null
 	 */
 	public function getHashSumAlgorithm(): ?string {
+		if ($this->isVersion43OrLater($this->version)) {
+			// ERN 4.3+: Edition → TechnicalDetails → DeliveryFile → File → HashSum → Algorithm
+			try {
+				return $this->getFirstEdition()->getTechnicalDetails()[0]->getDeliveryFile()[0]->getFile()->getHashSum()->getAlgorithm();
+			} catch (Throwable $ex) {
+				return null;
+			}
+		}
 		if ($this->isVersion4x($this->version)) {
-			// ERN 4.x: TechnicalDetails/File (single)/HashSum/Algorithm
+			// ERN 4.1/4.1.1: TechnicalDetails/File (single)/HashSum/Algorithm
 			try {
 				return $this->ddexDetails->getTechnicalDetails()[0]->getFile()->getHashSum()->getAlgorithm();
 			} catch (Throwable $ex) {

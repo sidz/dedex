@@ -35,14 +35,20 @@ class OnlyOneMainRelease extends Rule {
   protected $message = "Must have one and only one main release";
   
   public function validates($newReleaseMessage): bool {
+    // ERN 4.3 returns single Release object (always the main release)
+    $releases = $newReleaseMessage->getReleaseList()->getRelease();
+    if (!is_array($releases)) {
+      // ERN 4.3: single release is the main release by definition
+      return $releases !== null;
+    }
+
     $num_main = 0;
-    
-    foreach ($newReleaseMessage->getReleaseList()->getRelease() as $release) {
+    foreach ($releases as $release) {
       if (strtolower((string) $release->getIsMainRelease()) === "true") {
         $num_main++;
       }
     }
-    
+
     return $num_main === 1;
   }
 }

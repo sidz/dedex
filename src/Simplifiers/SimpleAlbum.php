@@ -194,7 +194,6 @@ class SimpleAlbum extends SimpleEntity {
   private function initFromErn4x() {
     $releaseList = $this->ern->getReleaseList();
 
-    // In ERN 4.x, getRelease() returns a single ReleaseType (the album)
     $release = $releaseList->getRelease();
     if ($release === null) {
       throw new Exception("No Album release found in this release message");
@@ -212,8 +211,7 @@ class SimpleAlbum extends SimpleEntity {
 
     // index deals
     $this->indexDealsByReleaseReference4x();
-    $albumRef = $this->ddexReleaseAlbum->getReleaseReference();
-    $this->deal = $this->dealsByReleaseReference[$albumRef] ?? null;
+    $this->deal = $this->dealsByReleaseReference[$this->ddexReleaseAlbum->getReleaseReference()] ?? null;
 
     // index resources
     $this->indexResourcesByReference();
@@ -316,7 +314,7 @@ class SimpleAlbum extends SimpleEntity {
       $ref = $linkedRef->value();
       if (array_key_exists($ref, $this->resourcesByReference)) {
         $resource = $this->resourcesByReference[$ref];
-        if (method_exists($resource, 'getType') && strtolower($resource->getType()) === "frontcoverimage") {
+        if (strtolower((string) $resource->getType()) === "frontcoverimage") {
           $this->frontCoverImage = new SimpleImage($resource, $this->version);
         }
       }
@@ -327,20 +325,36 @@ class SimpleAlbum extends SimpleEntity {
    * Index content items from ERN 4.x ResourceGroupContentItem array.
    */
   private function indexContentItems4x(array $contentItems, int $cd_num) {
+    // Build set of image references for skipping inline images
+    $imageRefs = [];
+    foreach ($this->ern->getResourceList()->getImage() as $img) {
+      $imageRefs[$img->getResourceReference()] = true;
+    }
+
     foreach ($contentItems as $item) {
       $track_num = (int) $item->getSequenceNumber();
-      $track_reference = $item->getReleaseResourceReference();
+      $track_reference = (string) $item->getReleaseResourceReference();
 
       if (!array_key_exists($track_reference, $this->resourcesByReference)) {
         continue;
       }
-      $track = $this->resourcesByReference[$track_reference];
+
+      // Detect inline images (not all ERN 4.x files use LinkedReleaseResourceReference for images)
+      if (isset($imageRefs[$track_reference])) {
+        $resource = $this->resourcesByReference[$track_reference];
+        if (strtolower((string) $resource->getType()) === "frontcoverimage") {
+          $this->frontCoverImage = new SimpleImage($resource, $this->version);
+        }
+        continue;
+      }
+
+      $resource = $this->resourcesByReference[$track_reference];
 
       $track_deal = array_key_exists($track_reference, $this->dealsByResourceReference ?? [])
               ? new SimpleDeal($this->dealsByResourceReference[$track_reference], $this->version)
               : null;
 
-      $this->tracksPerCd[$cd_num][$track_num] = new SimpleTrack($track, $track_deal, $this->version, $this->partyIndex);
+      $this->tracksPerCd[$cd_num][$track_num] = new SimpleTrack($resource, $track_deal, $this->version, $this->partyIndex);
     }
   }
 
@@ -548,12 +562,22 @@ class SimpleAlbum extends SimpleEntity {
    */
   public function getLabelName(): ?string {
     if ($this->isVersion4x($this->version)) {
-      // ERN 4.x: LabelName is a string directly on the Release
+      // ERN 4.1/4.1.1/4.2: LabelName is a string directly on the Release
       try {
-        return $this->ddexDetails->getLabelName()[0];
+        $label = $this->ddexDetails->getLabelName()[0];
+        if ($label !== null) {
+          return $label;
+        }
       } catch (Throwable $ex) {
-        return null;
+        // fall through to releaseLabelReference
       }
+      // ERN 4.3: resolve label via releaseLabelReference + partyIndex
+        try {
+          $ref = (string) $this->ddexDetails->getReleaseLabelReference()[0];
+        return $this->partyIndex[$ref] ?? $ref;
+        } catch (Throwable $ex) {
+          return null;
+        }
     }
     // ERN 3.x: LabelName is an object with value()
     try {
@@ -570,7 +594,11 @@ class SimpleAlbum extends SimpleEntity {
    * @return SimpleArtist[]
    */
   public function getArtists() {
-    return $this->resolveDisplayArtists($this->ddexDetails->getDisplayArtist(), $this->partyIndex);
+    $displayNames = [];
+    if ($this->isVersion4x($this->version)) {
+      $displayNames = $this->ddexDetails->getDisplayArtistName() ?? [];
+    }
+    return $this->resolveDisplayArtists($this->ddexDetails->getDisplayArtist(), $this->partyIndex, $displayNames);
   }
   
   /**

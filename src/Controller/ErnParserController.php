@@ -79,10 +79,12 @@ class ErnParserController {
    * or  \DedexBundle\Entity\Ern41\NewReleaseMessage
    * or  \DedexBundle\Entity\Ern411\NewReleaseMessage
    * or  \DedexBundle\Entity\Ern42\NewReleaseMessage
+   * or  \DedexBundle\Entity\Ern43\NewReleaseMessage
    * or  \DedexBundle\Entity\Ern382\PurgeReleaseMessage
    * or  \DedexBundle\Entity\Ern41\PurgeReleaseMessage
    * or  \DedexBundle\Entity\Ern411\PurgeReleaseMessage
    * or  \DedexBundle\Entity\Ern42\PurgeReleaseMessage
+   * or  \DedexBundle\Entity\Ern43\PurgeReleaseMessage
    */
   private $ern = null;
 
@@ -588,6 +590,10 @@ class ErnParserController {
       // Support both ATOM or regular datetime format
       $format = (mb_strlen($value) > mb_strlen('0000-00-00T00:00:00')) ? "Y-m-d\TH:i:sP" : "Y-m-d\TH:i:s";
       $new_elem = DateTime::createFromFormat($format, $value);
+    } elseif ($type == "\DateInterval") {
+      // Strip fractional seconds (e.g. PT4M23.583S → PT4M23S) that PHP's DateInterval doesn't support
+      $value_default = preg_replace('/(\d+)\.\d+S/', '$1S', $value_default ?? 'PT0S');
+      $new_elem = new \DateInterval($value_default);
     } else {
       try {
         $new_elem = new $type($value_default);
@@ -648,7 +654,7 @@ class ErnParserController {
    */
   private function detectVersion($fp) {
     $version = null;
-    $supported_versions = ["411", "41", "42", "382"];
+    $supported_versions = ["43", "42", "411", "41", "382"];
 
     while (($buffer = fgets($fp, 4096)) !== false) {
       $trimed = trim($buffer);
@@ -803,7 +809,7 @@ class ErnParserController {
 
     // Free parser memory
     xml_parser_free($this->xml_parser);
-    
+
     // Check for rules
     $this->validateRules();
 

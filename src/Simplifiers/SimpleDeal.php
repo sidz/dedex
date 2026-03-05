@@ -28,7 +28,7 @@ namespace DedexBundle\Simplifiers;
 
 use DateTimeImmutable;
 use DedexBundle\Entity\Ern382\DealType;
-use Swoole\MySQL\Exception;
+use Exception;
 use Throwable;
 
 /**
@@ -126,7 +126,7 @@ class SimpleDeal extends SimpleEntity {
 
 		// Territory codes
 		foreach ($deal->getDealTerms()->getTerritoryCode() as $territory) {
-			$this->territories[] = $territory;
+			$this->territories[] = is_object($territory) ? (string) $territory : $territory;
 		}
 	}
 	
